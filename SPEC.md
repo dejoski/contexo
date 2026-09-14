@@ -6,8 +6,8 @@ Static site. No build step, no backend, no framework. Mobile-first (iPhone), dar
 - `index.html` — shell, modals (how-to, stats, give-up, share), radar canvas, guess list
 - `styles.css` — themes via CSS vars, mobile-first
 - `app.js` — all game logic
-- `data/vocab.json` — array of 5,219 lowercase words (guess validation)
-- `data/index.json` — `{"puzzles":["2026-09-14",...],"latest":"2026-10-13"}`
+- `data/vocab.json` — array of 20,022 lowercase words (guess validation)
+- `data/index.json` — `{"puzzles":["2026-09-07",...],"latest":"2026-12-12"}` (97 puzzles)
 - `data/puzzles/YYYY-MM-DD.json` — one puzzle per day
 
 ## Puzzle JSON format
@@ -28,12 +28,13 @@ Static site. No build step, no backend, no framework. Mobile-first (iPhone), dar
 Rank lookup: word in `ranks` → index+1. Else in `tail` → 151+index. Else → null, displayed as "500+".
 
 ## Game modes
-- **Daily**: puzzle file for the player's local date (`data/puzzles/<local YYYY-MM-DD>.json`). Numbered `#<puzzle_number>`. State in localStorage `contexo:daily:<date>`: `{guesses: [{w, rank}], hints: n, won: bool, gaveUp: bool}`. Streak in `contexo:streak`: `{current, best, lastWonDate, repairsLeft, lastRepairWeek}`.
-- **Practice**: random puzzle from `index.json` (not today). State in `contexo:practice` (single slot, overwrite). Never touches daily stats/streak.
+- **Daily**: puzzle file for the player's local date (`data/puzzles/<local YYYY-MM-DD>.json`). Numbered `#<puzzle_number>` (series counts from 2026-09-07 = #1). State in localStorage `contexo:daily:<date>`: `{guesses: [{w, rank}], hints: n, won: bool, gaveUp: bool}`. Streak in `contexo:streak`: `{current, best, lastWonDate, repairsLeft, lastRepairWeek}`.
+- **Practice**: random puzzle from `index.json` (not today). State in `contexo:practice` (single slot, overwrite). Never touches daily stats/streak. "↻ New puzzle" button (practice only) starts a fresh random puzzle after confirm.
+- **Archive**: date-picker modal listing every past daily (dates < today, newest first). Selecting a date loads it reusing the same `contexo:daily:<date>` state key, so progress persists. Archive games count toward stats played/won but NEVER touch the streak (streak stays calendar-daily only).
 - **How to Play** overlay on first visit (`contexo:seenHowTo`).
 
 ## Core actions
-- **Guess**: text input + button. Normalize lowercase/trim. Must be in vocab.json else shake + "Not in word list". Duplicates ignored with a nudge. Each guess appended with rank; list sorted by rank ascending (best first), each row: rank badge, word, arrow, signal.
+- **Guess**: text input + button. Normalize lowercase/trim. Must be in vocab.json else shake + "Not in word list". Duplicates shake + nudge. Each guess appended with rank; list sorted by rank ascending (best first), each row: chronological guess number, rank badge, word, arrow, signal. Empty list shows "No guesses yet — try a common noun".
 - **Hint** (one-tap, unlimited): let best = min rank among guesses+hints so far (secret excluded). Target = round(best/2). Hint = the unused word in `ranks` whose rank is closest to target (ties → smaller rank). Hints never reveal the secret: the hint button is disabled once the best rank reaches #2 (player is one word away — take the guess). Hints count in stats/share.
 - **Give up**: confirm → reveal secret, show full top-150 list, mark gaveUp (streak breaks, game counts as played-not-won).
 
@@ -60,10 +61,10 @@ Contexo #12 · Easy
 🟩🟨🟧🟥⬛⭐
 contexo — guess the secret word
 ```
-Heat strip: one emoji per guess in guess order, capped at 30 then `…+N`: rank 1 → ⭐ (only the winning guess), 2–10 🟩, 11–50 🟨, 51–150 🟧, 151–500 🟥, 500+ ⬛. Gave-up games: header `Contexo #12 · gave up` and strip without ⭐.
+Heat strip: one emoji per guess in guess order, capped at 30 then `…+N`: rank 1 → ⭐ (only the winning guess), 2–10 🟩, 11–50 🟨, 51–150 🟧, 151–500 🟥, 500+ ⬛. Gave-up games: header `Contexo #12 · gave up` and strip without ⭐. Archive games: header `Contexo #12 · Archive`. Share uses `navigator.share` on mobile when available, else the copy modal. The share modal also auto-opens ~600ms after a win.
 
 ## Versus / challenge
-"Challenge a friend" button copies link `<origin>/?d=2026-09-14`. Opening with `?d=` loads that date's puzzle as a one-off game (doesn't affect streak). Compare share cards.
+"Challenge a friend" button copies link `<origin><pathname>?d=2026-09-14` (pathname-aware for subpath hosting). Opening with `?d=` loads that date's puzzle as a one-off game (doesn't affect streak). Compare share cards. Uses `navigator.share` on mobile when available.
 
 ## Streak repair
 If `lastWonDate` is the day before yesterday (one missed day) and `repairsLeft > 0`, show "Repair streak (1 left this week)" → sets lastWonDate to yesterday, decrements. `repairsLeft` resets to 1 each Monday.
@@ -84,4 +85,5 @@ Serve `site/` over http (python http.server). Playtest must OBSERVE and report e
 6. Reload mid-game → guesses persist.
 7. Practice mode loads a different puzzle, doesn't touch daily stats.
 8. Theme toggle works. Mobile viewport (390×844) renders cleanly.
+9. Archive: open Archive tab, pick a past date, guess, reload → guess persists; daily state and streak untouched; stats played/won increment.
 Report EXACT observed ranks/words/numbers. Fix failures, re-test. Do not report done until all green.
