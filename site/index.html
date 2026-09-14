@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="Contexo — guess the secret word. Every guess gets a similarity rank and a radar dot pointing at the answer.">
+<title>Contexo — guess the secret word</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='44' fill='%237c6cf0'/%3E%3Ccircle cx='50' cy='50' r='10' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <h1>Contexo</h1>
+    </div>
+    <div class="top-actions">
+      <button id="howto-btn" type="button" aria-label="How to play">?</button>
+      <button id="stats-btn" type="button" aria-label="Statistics">📊</button>
+      <button id="theme-btn" type="button" aria-label="Toggle theme">🌙</button>
+    </div>
+  </header>
+
+  <nav class="mode-tabs" role="tablist" aria-label="Game mode">
+    <button id="mode-daily" type="button" role="tab" aria-selected="true">Daily</button>
+    <button id="mode-practice" type="button" role="tab" aria-selected="false">Practice</button>
+  </nav>
+
+  <div class="game-meta">
+    <div id="puzzle-title">Contexo</div>
+    <div id="streak-line">🔥 0</div>
+  </div>
+
+  <section class="radar-wrap" aria-label="Radar map">
+    <canvas id="radar" width="600" height="600"></canvas>
+    <div id="signal-line">Signal —</div>
+  </section>
+
+  <form id="guess-form" autocomplete="off">
+    <input id="guess-input" type="text" placeholder="Type a word…" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="30" aria-label="Your guess">
+    <button id="guess-btn" type="submit">Guess</button>
+  </form>
+
+  <div id="actions">
+    <button id="hint-btn" type="button">💡 Hint</button>
+    <button id="giveup-btn" type="button">Give up</button>
+    <button id="share-btn" type="button">Share</button>
+    <button id="challenge-btn" type="button">⚔️ Challenge a friend</button>
+  </div>
+
+  <ul id="guess-list" aria-label="Guesses"></ul>
+
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<div id="modal-howto" class="modal" role="dialog" aria-modal="true" aria-labelledby="howto-title">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="howto-title">How to play</h2>
+      <button class="modal-close" type="button" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-content">
+      <p><strong>Contexo</strong> hides one secret word. Guess words to find it.</p>
+      <ul>
+        <li><strong>Ranks are clues.</strong> Every guess gets a rank: <strong>#1 is the secret itself</strong>, lower numbers are closer in meaning. A guess that isn't near the secret shows <strong>500+</strong>.</li>
+        <li><strong>The radar is your map.</strong> Each ranked guess lands on the radar as a colored dot. The arrow on every row points from your guess <em>toward</em> the secret — follow the arrows and the dots will converge on it.</li>
+        <li><strong>Signal strength.</strong> The closer a guess is, the higher the signal (0–100). Gray dots on the rim are guesses that landed far off the map.</li>
+        <li><strong>Colors match closeness:</strong> 🟡 #1 is gold, green is near, then lime, yellow, orange, red, and gray for far-off guesses.</li>
+        <li><strong>Hints are unlimited.</strong> Tap 💡 Hint any time for a word about half as close as your best guess so far. Hints count in your score.</li>
+        <li><strong>Daily vs Practice.</strong> Daily gives you one puzzle a day and builds a streak. Practice picks a random past puzzle — no streak, no stats.</li>
+        <li><strong>Stuck?</strong> Give up reveals the word and the full top-150, but your streak breaks.</li>
+        <li><strong>Challenge a friend</strong> copies a link to today's puzzle so you can both play and compare share cards.</li>
+      </ul>
+      <p class="fine">Keep guessing until the ⭐ appears. Good luck.</p>
+    </div>
+  </div>
+</div>
+
+<div id="modal-stats" class="modal" role="dialog" aria-modal="true" aria-labelledby="stats-title">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="stats-title">Stats</h2>
+      <button class="modal-close" type="button" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-content">
+      <div id="stats-body"></div>
+    </div>
+  </div>
+</div>
+
+<div id="modal-giveup" class="modal" role="dialog" aria-modal="true" aria-labelledby="giveup-title">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="giveup-title">Give up?</h2>
+      <button class="modal-close" type="button" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-content">
+      <div id="giveup-body">
+        <p>The secret word will be revealed along with the full top-150 list. This game will count as played but not won, and your streak will break.</p>
+      </div>
+      <button id="giveup-confirm-btn" type="button">Reveal the word</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-share" class="modal" role="dialog" aria-modal="true" aria-labelledby="share-title">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="share-title">Share</h2>
+      <button class="modal-close" type="button" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-content">
+      <pre id="share-text"></pre>
+      <button id="copy-share-btn" type="button">Copy</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
