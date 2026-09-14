@@ -1,9 +1,9 @@
 'use strict';
 /* Contexo — all game logic (vanilla JS, no deps).
- * DOM contract: header #theme-btn #howto-btn #stats-btn; nav #mode-daily #mode-practice;
+ * DOM contract: header #theme-btn #howto-btn #stats-btn; nav #mode-daily #mode-practice #mode-archive;
  * #puzzle-title, #streak-line, canvas#radar, #signal-line,
  * form#guess-form > input#guess-input + button#guess-btn,
- * #hint-btn #giveup-btn #share-btn #challenge-btn, ul#guess-list, #toast,
+ * #hint-btn #giveup-btn #share-btn #challenge-btn #newpractice-btn, ul#guess-list, #toast,
  * modals #modal-howto #modal-stats(#stats-body) #modal-giveup(#giveup-body,#giveup-confirm-btn)
  * #modal-share(pre#share-text,#copy-share-btn).
  * Classes: .open (modals), .active (tabs), .latest (latest row), .shake (invalid input),
@@ -72,7 +72,7 @@ const store = {
 // ---------------- state ----------------
 let puzzle = null;      // loaded puzzle JSON
 let puzzleDate = null;  // YYYY-MM-DD of loaded puzzle
-let mode = 'daily';     // 'daily' | 'practice'
+let mode = 'daily';     // 'daily' | 'practice' | 'archive'
 let oneOff = false;     // ?d= for a non-today date (no stats/streak effect)
 let state = null;       // {guesses:[{w,rank,hint?}], hints, won, gaveUp, scored?, date?}
 let vocab = null;       // Set of valid words
@@ -88,6 +88,8 @@ function stateKey() {
 function saveState() { store.set(stateKey(), state); }
 // Only a pure daily game (today's puzzle, no ?d override) touches stats/streak.
 function isRealDaily() { return mode === 'daily' && !oneOff; }
+// Archive replays a past daily: counts toward stats, never touches the streak.
+function isArchive() { return mode === 'archive'; }
 
 function buildLookup() {
   rankMap = new Map();
@@ -146,7 +148,7 @@ function shakeInput() {
 }
 
 // ---------------- modals ----------------
-const MODAL_IDS = ['modal-howto', 'modal-stats', 'modal-giveup', 'modal-share'];
+const MODAL_IDS = ['modal-howto', 'modal-stats', 'modal-giveup', 'modal-share', 'modal-archive'];
 function openModal(m) { m.classList.add('open'); }
 function closeModal(m) {
   m.classList.remove('open');
@@ -256,6 +258,18 @@ function scoreGame(wonGame) {
   store.set('contexo:stats', s);
 }
 
+// Archive scoring: played/won count, but the streak is calendar-daily only
+// and is never touched by archive games.
+function archiveScoreGame(wonGame) {
+  const s = getStats();
+  s.played += 1;
+  if (wonGame) {
+    s.won += 1;
+    s.counts.push(state.guesses.length);
+  }
+  store.set('contexo:stats', s);
+}
+
 // ---------------- game flow ----------------
 function handleGuess(e) {
   e.preventDefault();
@@ -269,6 +283,7 @@ function handleGuess(e) {
     return;
   }
   if (state.guesses.some((g) => g.w === w)) {
+    shakeInput();
     toast('Already guessed — try another word');
     input.select();
     return;
@@ -291,9 +306,32 @@ function onWin() {
     scoreGame(true);
     state.scored = true;
   }
+  if (!state.scored && isArchive()) {
+    archiveScoreGame(true);
+    state.scored = true;
+  }
   saveState();
   render();
   toast(`🎉 Correct! The secret was “${puzzle.secret}”`);
+  // The win moment is peak share intent — open the share sheet automatically.
+  setTimeout(() => {
+    if (!puzzle || !state || !state.won) return;
+    openShare();
+  }, 600);
+}
+
+function openShare() {
+  if (!puzzle || !state) return;
+  const text = buildShareCard();
+  if (navigator.share) {
+    navigator.share({ text }).catch(() => {
+      $('share-text').textContent = text;
+      openModal($('modal-share'));
+    });
+    return;
+  }
+  $('share-text').textContent = text;
+  openModal($('modal-share'));
 }
 
 // best = min rank among guesses+hints so far, secret excluded; null ranks count as 500.
@@ -356,6 +394,10 @@ function doGiveUp() {
     scoreGame(false); // played-not-won, streak breaks
     state.scored = true;
   }
+  if (!state.scored && isArchive()) {
+    archiveScoreGame(false); // played-not-won, streak untouched
+    state.scored = true;
+  }
   saveState();
   // Reveal secret + full top-150 list inside the give-up modal.
   const items = puzzle.ranks
@@ -381,6 +423,7 @@ function renderTitle() {
   const n = puzzle.meta.puzzle_number;
   let t = `Contexo #${n} · ${puzzle.meta.difficulty}`;
   if (mode === 'practice') t = `Contexo #${n} · Practice`;
+  else if (mode === 'archive') t = `Contexo #${n} · Archive`;
   $('puzzle-title').textContent = t;
 }
 
@@ -395,7 +438,8 @@ function renderStreakLine() {
   el.appendChild(fire);
   // Repair offer: lastWonDate is the day before yesterday (one missed day) + repairs left.
   const dby = addDays(today, -2);
-  if (st.lastWonDate === dby && st.repairsLeft > 0 && state && !state.won) {
+  // Repair offer: daily mode only (archive never touches the streak).
+  if (mode === 'daily' && st.lastWonDate === dby && st.repairsLeft > 0 && state && !state.won) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.id = 'repair-btn';
@@ -415,11 +459,23 @@ function renderStreakLine() {
 function renderList() {
   const ul = $('guess-list');
   ul.innerHTML = '';
+  if (!state.guesses.length) {
+    const li = document.createElement('li');
+    li.className = 'guess-empty';
+    li.textContent = 'No guesses yet — try a common noun';
+    ul.appendChild(li);
+    return;
+  }
   const sorted = [...state.guesses].sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
   const latest = state.guesses[state.guesses.length - 1];
   for (const g of sorted) {
     const li = document.createElement('li');
     li.className = `guess-row ${bandClass(g.rank)}${g === latest ? ' latest' : ''}`;
+
+    // Chronological guess number (list is sorted by rank, so order is otherwise lost).
+    const num = document.createElement('span');
+    num.className = 'guess-num';
+    num.textContent = String(state.guesses.indexOf(g) + 1);
 
     const badge = document.createElement('span');
     badge.className = 'rank-badge';
@@ -449,32 +505,56 @@ function renderList() {
     sig.className = 'guess-signal';
     sig.textContent = gc ? `Signal ${signalOf(gc)}` : '—';
 
-    li.append(badge, word, arrow, sig);
+    li.append(num, badge, word, arrow, sig);
     ul.appendChild(li);
   }
 }
 
 function renderSignal() {
   const el = $('signal-line');
+  // Persistent result line once the game is over (the toast vanishes in 2.6s).
+  if (state.won) {
+    el.textContent = `⭐ Secret was “${puzzle.secret}” — ${state.guesses.length} guesses`;
+    return;
+  }
+  if (state.gaveUp) {
+    el.textContent = `The secret was “${puzzle.secret}”`;
+    return;
+  }
   const last = state.guesses[state.guesses.length - 1];
   if (!last) { el.textContent = ''; return; }
+  // Live progress header: best rank so far + guess count + latest signal.
+  const b = bestRank();
+  const bestTxt = b >= 500 ? 'Best —' : `Best #${b}`;
   const gc = coordMap.get(last.w);
-  el.textContent = gc ? `Signal ${signalOf(gc)}` : 'Signal —';
+  const sig = gc ? `Signal ${signalOf(gc)}` : 'Signal —';
+  el.textContent = `${bestTxt} · ${state.guesses.length} guesses · ${sig}`;
 }
 
 function renderControls() {
   const over = state.won || state.gaveUp;
   // Hints are unlimited but never reveal rank #1: disabled at rank #2 (one word away).
-  const hintOff = over || (!over && bestRank() <= 2);
+  const oneAway = !over && bestRank() <= 2;
+  const hintOff = over || oneAway;
   $('guess-input').disabled = over;
   $('guess-btn').disabled = over;
   $('hint-btn').disabled = hintOff;
+  $('hint-btn').title = oneAway
+    ? 'You’re one word away — take the guess!'
+    : 'Get a hint word, about half as close as your best guess';
   $('giveup-btn').disabled = over;
+  // No empty share cards: heat strip needs at least one guess.
+  $('share-btn').disabled = state.guesses.length === 0;
+  $('newpractice-btn').hidden = mode !== 'practice';
 }
 
 function renderTabs() {
   $('mode-daily').classList.toggle('active', mode === 'daily');
   $('mode-practice').classList.toggle('active', mode === 'practice');
+  $('mode-archive').classList.toggle('active', mode === 'archive');
+  $('mode-daily').setAttribute('aria-selected', mode === 'daily');
+  $('mode-practice').setAttribute('aria-selected', mode === 'practice');
+  $('mode-archive').setAttribute('aria-selected', mode === 'archive');
 }
 
 function render() {
@@ -522,7 +602,9 @@ function buildShareCard() {
   const st = getStreak();
   const header = state.gaveUp
     ? `Contexo #${n} · gave up`
-    : `Contexo #${n} · ${puzzle.meta.difficulty}`;
+    : mode === 'archive'
+      ? `Contexo #${n} · Archive`
+      : `Contexo #${n} · ${puzzle.meta.difficulty}`;
   const order = state.guesses;
   // Heat strip: one emoji per guess in guess order, capped at 30 then …+N.
   // The winning ⭐ is never cut off: if the winning guess falls past the cap,
@@ -686,11 +768,11 @@ async function loadDaily(date) {
   render();
 }
 
-async function loadPractice() {
+async function loadPractice(forceNew) {
   mode = 'practice';
   const today = todayLocal();
   const ps = store.get('contexo:practice', null);
-  if (ps && ps.date && !ps.won && !ps.gaveUp) {
+  if (!forceNew && ps && ps.date && !ps.won && !ps.gaveUp) {
     // resume in-progress practice game
     puzzleDate = ps.date;
     puzzle = await loadPuzzle(puzzleDate);
@@ -706,6 +788,68 @@ async function loadPractice() {
   }
   buildLookup();
   render();
+}
+
+async function loadArchive(date) {
+  // Archive replays a past daily under the SAME per-date state key, so
+  // progress persists; scoring counts played/won but never the streak.
+  mode = 'archive';
+  oneOff = false;
+  puzzleDate = date;
+  puzzle = await loadPuzzle(date);
+  state = store.get(`contexo:daily:${date}`, freshState());
+  buildLookup();
+  render();
+}
+
+function prettyDate(ds) {
+  return parseDate(ds).toLocaleDateString(undefined, {
+    weekday: 'short', month: 'short', day: 'numeric',
+  });
+}
+
+function archiveStatus(ds) {
+  const st = store.get(`contexo:daily:${ds}`, null);
+  if (!st) return '·';
+  if (st.won) return '⭐';
+  if (st.gaveUp) return '🏳️';
+  if (st.guesses && st.guesses.length) return `▶ ${st.guesses.length}`;
+  return '·';
+}
+
+async function openArchive() {
+  const list = $('archive-list');
+  list.innerHTML = '<p class="fine">Loading…</p>';
+  openModal($('modal-archive'));
+  try {
+    const idx = await loadIndex();
+    const today = todayLocal();
+    const dates = (idx.puzzles || []).filter((d) => d < today).sort().reverse();
+    if (!dates.length) {
+      list.innerHTML = '<p class="fine">No past puzzles yet — check back tomorrow.</p>';
+      return;
+    }
+    const all = (idx.puzzles || []).slice().sort();
+    list.innerHTML = '';
+    for (const ds of dates) {
+      const n = all.indexOf(ds) + 1; // puzzle # = position in the series
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'archive-row';
+      btn.innerHTML =
+        `<span class="archive-date">${escapeHtml(prettyDate(ds))}</span>` +
+        `<span class="archive-num">#${n}</span>` +
+        `<span class="archive-status">${escapeHtml(archiveStatus(ds))}</span>`;
+      btn.addEventListener('click', async () => {
+        closeModal($('modal-archive'));
+        try { await loadArchive(ds); }
+        catch (e) { toast(`Could not load puzzle: ${e.message}`); }
+      });
+      list.appendChild(btn);
+    }
+  } catch (e) {
+    list.innerHTML = `<p class="fine">Could not load archive: ${escapeHtml(e.message)}</p>`;
+  }
 }
 
 async function loadGame() {
@@ -744,18 +888,19 @@ function bindUI() {
   $('giveup-btn').addEventListener('click', openGiveUp);
   $('giveup-confirm-btn').addEventListener('click', doGiveUp);
 
-  $('share-btn').addEventListener('click', () => {
-    if (!puzzle || !state) return;
-    $('share-text').textContent = buildShareCard();
-    openModal($('modal-share'));
-  });
+  $('share-btn').addEventListener('click', () => { openShare(); });
   $('copy-share-btn').addEventListener('click', async () => {
     const ok = await copyText($('share-text').textContent);
     toast(ok ? 'Copied to clipboard' : 'Copy failed — long-press to copy manually');
   });
 
   $('challenge-btn').addEventListener('click', async () => {
-    const url = `${location.origin}/?d=${puzzleDate}`;
+    // pathname-aware so challenge links work when hosted under a subpath.
+    const url = `${location.origin}${location.pathname}?d=${puzzleDate}`;
+    if (navigator.share) {
+      try { await navigator.share({ url, title: 'Contexo challenge' }); return; }
+      catch { /* fall through to clipboard */ }
+    }
     const ok = await copyText(url);
     toast(ok ? 'Challenge link copied' : 'Copy failed — long-press to copy manually');
   });
@@ -769,6 +914,17 @@ function bindUI() {
   $('mode-practice').addEventListener('click', async () => {
     if (mode === 'practice') return;
     try { await loadPractice(); } catch (e) { toast(`Could not load practice: ${e.message}`); }
+  });
+  $('mode-archive').addEventListener('click', async () => {
+    await openArchive();
+  });
+  $('newpractice-btn').addEventListener('click', async () => {
+    if (mode !== 'practice') return;
+    if (state && state.guesses.length && !state.won && !state.gaveUp &&
+        !confirm('Start a new practice puzzle? Your current progress will be lost.')) {
+      return;
+    }
+    try { await loadPractice(true); } catch (e) { toast(`Could not load practice: ${e.message}`); }
   });
 
   $('theme-btn').addEventListener('click', () => {
