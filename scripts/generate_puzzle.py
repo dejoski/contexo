@@ -35,7 +35,8 @@ MODEL = "muse-spark-1.3-contributor"
 EFFORT_RANK = "xhigh"   # user's engine spec: the semantic ranking is the game's brain, max reasoning
 EFFORT_COORDS = "medium"  # coords are intuitive spatial layout; xhigh overthinks them into length failures
 MAX_TOKENS = 32000      # xhigh reasoning shares the output budget; 32k leaves room for reasoning + JSON
-EPOCH = dt.date(2026, 9, 14)  # puzzle #1
+EPOCH = dt.date(2026, 9, 14)  # puzzle #1 (secret rotation anchor; do NOT change)
+SERIES_START = dt.date(2026, 9, 7)  # first backfilled daily; puzzle_number counts from here
 
 CANDIDATES_JSON = os.path.join(REPO, "data", "candidates.json")
 candidates_cache = None
@@ -276,7 +277,7 @@ def generate(date: dt.date, api_key: str, rank_tpl: str, coords_tpl: str) -> dic
     puzzle["tail"] = tail
     difficulty = load_difficulty().get(secret, "Standard")
     puzzle["meta"] = {
-        "puzzle_number": (date - EPOCH).days + 1,
+        "puzzle_number": (date - SERIES_START).days + 1,
         "date": date.isoformat(),
         "difficulty": difficulty,
         "model": MODEL,

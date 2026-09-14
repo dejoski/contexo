@@ -25,6 +25,7 @@
   <nav class="mode-tabs" role="tablist" aria-label="Game mode">
     <button id="mode-daily" type="button" role="tab" aria-selected="true">Daily</button>
     <button id="mode-practice" type="button" role="tab" aria-selected="false">Practice</button>
+    <button id="mode-archive" type="button" role="tab" aria-selected="false">Archive</button>
   </nav>
 
   <div class="game-meta">
@@ -47,6 +48,7 @@
     <button id="giveup-btn" type="button">Give up</button>
     <button id="share-btn" type="button">Share</button>
     <button id="challenge-btn" type="button">⚔️ Challenge a friend</button>
+    <button id="newpractice-btn" type="button" hidden>↻ New puzzle</button>
   </div>
 
   <ul id="guess-list" aria-label="Guesses"></ul>
@@ -69,7 +71,7 @@
         <li><strong>Signal strength.</strong> The closer a guess is, the higher the signal (0–100). Gray dots on the rim are guesses that landed far off the map.</li>
         <li><strong>Colors match closeness:</strong> 🟡 #1 is gold, green is near, then lime, yellow, orange, red, and gray for far-off guesses.</li>
         <li><strong>Hints are unlimited.</strong> Tap 💡 Hint for a word about half as close as your best guess so far — available until you're one word away. Hints count in your score.</li>
-        <li><strong>Daily vs Practice.</strong> Daily gives you one puzzle a day and builds a streak. Practice picks a random past puzzle — no streak, no stats.</li>
+        <li><strong>Daily vs Practice vs Archive.</strong> Daily gives you one puzzle a day and builds a streak. Practice picks a random past puzzle — no streak, no stats. Archive lets you replay any past daily — it counts toward stats but never touches your streak.</li>
         <li><strong>Stuck?</strong> Give up reveals the word and the full top-150, but your streak breaks.</li>
         <li><strong>Challenge a friend</strong> copies a link to today's puzzle so you can both play and compare share cards.</li>
       </ul>
@@ -114,6 +116,19 @@
     <div class="modal-content">
       <pre id="share-text"></pre>
       <button id="copy-share-btn" type="button">Copy</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-archive" class="modal" role="dialog" aria-modal="true" aria-labelledby="archive-title">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="archive-title">Archive</h2>
+      <button class="modal-close" type="button" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-content">
+      <p class="fine">Past dailies, newest first. Archive games count toward your stats but never touch your streak.</p>
+      <div id="archive-list"></div>
     </div>
   </div>
 </div>
