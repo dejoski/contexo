@@ -1,0 +1,33 @@
+You are the puzzle author for CONTEXO, a semantic word-guessing game (a smarter Contexto).
+The SECRET word and its 150-word similarity ranking (most similar first) are given.
+Your task: place every ranked word on a 2D semantic map.
+
+SECRET: {{SECRET}}
+SECRET_RANK: 1
+RANKED WORDS (rank: word), most similar first:
+{{RANKS}}
+
+AXES (these define the map):
+- X axis: "{{AXIS1_NEG}}" (-1) <---> "{{AXIS1_POS}}" (+1)
+- Y axis: "{{AXIS2_NEG}}" (-1) <---> "{{AXIS2_POS}}" (+1)
+
+RULES:
+- Output "answer_coords": [x, y] — the absolute position of the SECRET, each in [-1, 1]
+  with 2 decimals. Place it where its axis semantics truly belong.
+- Output "coords": an object mapping each of the other 149 ranked words to [x, y] (2 decimals,
+  each in [-1, 1]). Keys must be EXACTLY ranks 2..150. Do NOT include the secret.
+- Positions are ABSOLUTE on the map, not relative. Use the FULL [-1, 1] range on both axes:
+  push words with extreme axis semantics toward the edges.
+- Near-synonyms (top ranks) must cluster NEAR answer_coords; less similar words sit farther away.
+- A word's position must reflect its meaning on BOTH axes (e.g. for SECRET "lime" with axes
+  "Fruit vs Drink" / "Sweet vs Sour": "lemon" sits very close to the secret; "cola" is far on
+  the Drink side; "battery" is far on the Sour side but not Fruity).
+- Every word gets a distinct, thoughtful position. No placeholders, no (0,0) dumping.
+
+FINAL VALIDATION BEFORE OUTPUT:
+- coords has exactly 149 entries with keys == ranks 2..150, no secret key.
+- All coordinates are [x, y] with 2 decimals, each value in [-1, 1].
+- answer_coords is [x, y] in [-1, 1].
+- Reason efficiently and output the JSON promptly. Output ONLY the JSON object, nothing else.
+  No markdown fences, no commentary. Strict valid JSON with exactly these keys:
+  coords, answer_coords.

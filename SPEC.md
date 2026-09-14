@@ -34,7 +34,7 @@ Rank lookup: word in `ranks` → index+1. Else in `tail` → 151+index. Else →
 
 ## Core actions
 - **Guess**: text input + button. Normalize lowercase/trim. Must be in vocab.json else shake + "Not in word list". Duplicates ignored with a nudge. Each guess appended with rank; list sorted by rank ascending (best first), each row: rank badge, word, arrow, signal.
-- **Hint** (one-tap, unlimited): let best = min rank among guesses+hints so far (secret excluded). Target = round(best/2). Hint = the unused word in `ranks` whose rank is closest to target (ties → smaller rank), never the secret unless best == 2 (then hint IS the secret — player basically won). Hints count in stats/share. Disabled only when rank 1 achieved.
+- **Hint** (one-tap, unlimited): let best = min rank among guesses+hints so far (secret excluded). Target = round(best/2). Hint = the unused word in `ranks` whose rank is closest to target (ties → smaller rank). Hints never reveal the secret: the hint button is disabled once the best rank reaches #2 (player is one word away — take the guess). Hints count in stats/share.
 - **Give up**: confirm → reveal secret, show full top-150 list, mark gaveUp (streak breaks, game counts as played-not-won).
 
 ## Radar (the killer feature)

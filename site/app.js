@@ -296,9 +296,9 @@ function onWin() {
   toast(`🎉 Correct! The secret was “${puzzle.secret}”`);
 }
 
-function handleHint() {
-  if (!puzzle || !state || state.won || state.gaveUp) return;
-  // best = min rank among guesses+hints so far, secret excluded; null ranks count as 500
+// best = min rank among guesses+hints so far, secret excluded; null ranks count as 500.
+// Returns 500 when nothing scored yet.
+function bestRank() {
   let best = 500;
   let hasScored = false;
   for (const g of state.guesses) {
@@ -307,36 +307,38 @@ function handleHint() {
     const r = g.rank == null ? 500 : g.rank;
     if (r < best) best = r;
   }
-  if (!hasScored) best = 500;
+  return hasScored ? best : 500;
+}
+
+function handleHint() {
+  if (!puzzle || !state || state.won || state.gaveUp) return;
+  const best = bestRank();
+  if (best <= 2) {
+    // Never reveal rank #1 through a hint: at rank #2 the player is one
+    // word away, so hints are disabled and they take the winning guess.
+    toast('💡 You’re one word away — take the guess!');
+    render();
+    return;
+  }
   const used = new Set(state.guesses.map((g) => g.w));
   let hintWord = null;
   let hintRank = null;
-  if (best === 2) {
-    hintWord = puzzle.secret; // player basically won: hint IS the secret
-    hintRank = 1;
-  } else {
-    const target = Math.round(best / 2);
-    let bestDist = Infinity;
-    // ranks[0] is the secret — never hint it (except best === 2 above).
-    // Ascending scan => ties resolve to the smaller rank.
-    for (let i = 1; i < puzzle.ranks.length; i++) {
-      const w = puzzle.ranks[i];
-      if (used.has(w)) continue;
-      const r = i + 1;
-      const d = Math.abs(r - target);
-      if (d < bestDist) { bestDist = d; hintWord = w; hintRank = r; }
-    }
+  const target = Math.round(best / 2);
+  let bestDist = Infinity;
+  // ranks[0] is the secret — never hint it. Ascending scan => ties resolve to the smaller rank.
+  for (let i = 1; i < puzzle.ranks.length; i++) {
+    const w = puzzle.ranks[i];
+    if (used.has(w)) continue;
+    const r = i + 1;
+    const d = Math.abs(r - target);
+    if (d < bestDist) { bestDist = d; hintWord = w; hintRank = r; }
   }
   if (!hintWord) { toast('No more hints'); return; }
   state.guesses.push({ w: hintWord, rank: hintRank, hint: true });
   state.hints += 1;
-  if (hintRank === 1) {
-    onWin();
-  } else {
-    saveState();
-    render();
-    toast(`💡 Hint: “${hintWord}” (#${hintRank})`);
-  }
+  saveState();
+  render();
+  toast(`💡 Hint: “${hintWord}” (#${hintRank})`);
 }
 
 function openGiveUp() {
@@ -462,9 +464,11 @@ function renderSignal() {
 
 function renderControls() {
   const over = state.won || state.gaveUp;
+  // Hints are unlimited but never reveal rank #1: disabled at rank #2 (one word away).
+  const hintOff = over || (!over && bestRank() <= 2);
   $('guess-input').disabled = over;
   $('guess-btn').disabled = over;
-  $('hint-btn').disabled = over; // disabled only once rank 1 is achieved (or game given up)
+  $('hint-btn').disabled = hintOff;
   $('giveup-btn').disabled = over;
 }
 
