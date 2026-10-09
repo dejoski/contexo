@@ -531,6 +531,36 @@ function renderSignal() {
   el.textContent = `${bestTxt} · ${state.guesses.length} guesses · ${sig}`;
 }
 
+// ---------------- next-puzzle countdown ----------------
+// Shown only once today's real Daily is finished (won or gave up): a live
+// ticking countdown to local midnight, when the next daily unlocks.
+function msUntilMidnight() {
+  const now = new Date();
+  const mid = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return mid - now;
+}
+function formatCountdown(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+function dailyFinished() {
+  return mode === 'daily' && !oneOff && puzzleDate === todayLocal() &&
+    state && (state.won || state.gaveUp);
+}
+function renderCountdown() {
+  const el = $('countdown-line');
+  if (!el) return;
+  if (!dailyFinished()) { el.hidden = true; el.textContent = ''; return; }
+  const ms = msUntilMidnight();
+  el.hidden = false;
+  el.textContent = ms <= 1000
+    ? 'Next puzzle is ready — reload to play it · or try Practice meanwhile'
+    : `Next puzzle in ${formatCountdown(ms)} · try Practice or the Archive meanwhile`;
+}
+
 function renderControls() {
   const over = state.won || state.gaveUp;
   // Hints are unlimited but never reveal rank #1: disabled at rank #2 (one word away).
@@ -563,6 +593,7 @@ function render() {
   renderStreakLine();
   renderList();
   renderSignal();
+  renderCountdown();
   renderControls();
   renderTabs();
 }
@@ -951,6 +982,8 @@ async function init() {
   requestAnimationFrame(drawRadar);
   await loadVocab();
   await loadGame();
+  // Tick the next-puzzle countdown (no-op unless today's Daily is finished).
+  setInterval(renderCountdown, 1000);
   // How-to overlay on first visit.
   if (!store.get('contexo:seenHowTo', false)) openModal($('modal-howto'));
 }
