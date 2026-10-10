@@ -18,12 +18,26 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Check for API key
+        id: gate
+        env:
+          SPARK_API_KEY: ${{ secrets.SPARK_API_KEY }}
+        run: |
+          if [ -n "$SPARK_API_KEY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SPARK_API_KEY secret is not set - skipping puzzle generation. Puzzles are pre-generated through 2026-12-12; set the SPARK_API_KEY repo secret to resume automatic generation."
+          fi
+
       - name: Generate next puzzle
+        if: steps.gate.outputs.ready == 'true'
         env:
           SPARK_API_KEY: ${{ secrets.SPARK_API_KEY }}
         run: python3 scripts/generate_puzzle.py --next
 
       - name: Commit and push
+        if: steps.gate.outputs.ready == 'true'
         run: |
           git config user.name "contexo-bot"
           git config user.email "contexo-bot@users.noreply.github.com"
