@@ -674,6 +674,25 @@ async function copyText(t) {
 // ---------------- radar ----------------
 const radar = () => $('radar');
 let rctx = null;
+let radarRaf = null; // pending animation-frame id, or null when the loop is stopped
+
+function startRadar() {
+  if (radarRaf == null && !document.hidden) {
+    radarRaf = requestAnimationFrame(drawRadar);
+  }
+}
+function stopRadar() {
+  if (radarRaf != null) {
+    cancelAnimationFrame(radarRaf);
+    radarRaf = null;
+  }
+}
+// Pause the radar loop while the tab is hidden (it only animates a pulse
+// ring — redrawing a hidden canvas just burns battery/CPU), resume on return.
+function onRadarVisibility() {
+  if (document.hidden) stopRadar();
+  else startRadar();
+}
 
 function sizeRadar() {
   const c = radar();
@@ -686,7 +705,9 @@ function sizeRadar() {
 }
 
 function drawRadar(now) {
-  requestAnimationFrame(drawRadar);
+  radarRaf = null;
+  if (document.hidden) return; // paused — visibilitychange restarts the loop
+  try {
   const c = radar();
   if (!c || !puzzle || !state) return;
   const w = c.clientWidth;
@@ -785,6 +806,13 @@ function drawRadar(now) {
       ctx.arc(cx + lc[0] * R, cy - lc[1] * R, 7 + t * 12, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
+    }
+  }
+  } finally {
+    // Keep looping only while visible; an early return above (no puzzle
+    // yet, zero-width canvas) must not kill the loop either.
+    if (!document.hidden && radarRaf == null) {
+      radarRaf = requestAnimationFrame(drawRadar);
     }
   }
 }
@@ -979,7 +1007,8 @@ async function init() {
   bindModals();
   rctx = radar().getContext('2d');
   sizeRadar();
-  requestAnimationFrame(drawRadar);
+  document.addEventListener('visibilitychange', onRadarVisibility);
+  startRadar();
   await loadVocab();
   await loadGame();
   // Tick the next-puzzle countdown (no-op unless today's Daily is finished).
