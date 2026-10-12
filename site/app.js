@@ -596,6 +596,9 @@ function render() {
   renderCountdown();
   renderControls();
   renderTabs();
+  // Under reduced motion there is no radar loop, so each render needs
+  // one explicit frame to paint the new state (no-op while looping).
+  if (rctx) startRadar();
 }
 
 // ---------------- stats modal ----------------
@@ -675,6 +678,16 @@ async function copyText(t) {
 const radar = () => $('radar');
 let rctx = null;
 let radarRaf = null; // pending animation-frame id, or null when the loop is stopped
+
+// Reduced motion: CSS already flattens animations/transitions under
+// prefers-reduced-motion, but the canvas pulse ring is drawn in JS and
+// ignored it. When the user prefers reduced motion, draw a static ring
+// once per state change instead of running the 60fps pulse loop.
+let motionMql = null;
+try { motionMql = window.matchMedia('(prefers-reduced-motion: reduce)'); } catch { /* old browser */ }
+function prefersReducedMotion() {
+  return !!(motionMql && motionMql.matches);
+}
 
 function startRadar() {
   if (radarRaf == null && !document.hidden) {
@@ -793,25 +806,28 @@ function drawRadar(now) {
     dot(cx + R * Math.cos(a), cy + R * Math.sin(a), 3, '#4b5563');
   });
 
-  // latest-guess pulse ring
+  // latest-guess pulse ring (static ring under prefers-reduced-motion)
   if (latest) {
     const lc = coordMap.get(latest.w);
     if (lc) {
-      const t = (now % 1200) / 1200;
+      const reduced = prefersReducedMotion();
+      const t = reduced ? 0 : (now % 1200) / 1200;
       ctx.save();
-      ctx.globalAlpha = 1 - t;
+      ctx.globalAlpha = reduced ? 0.9 : 1 - t;
       ctx.strokeStyle = bandColor(latest.rank);
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(cx + lc[0] * R, cy - lc[1] * R, 7 + t * 12, 0, Math.PI * 2);
+      ctx.arc(cx + lc[0] * R, cy - lc[1] * R, reduced ? 11 : 7 + t * 12, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
   }
   } finally {
-    // Keep looping only while visible; an early return above (no puzzle
-    // yet, zero-width canvas) must not kill the loop either.
-    if (!document.hidden && radarRaf == null) {
+    // Keep looping only while visible and motion is allowed; an early
+    // return above (no puzzle yet, zero-width canvas) must not kill the
+    // loop either. Under reduced motion render() requests one fresh
+    // frame per state change instead of looping.
+    if (!document.hidden && radarRaf == null && !prefersReducedMotion()) {
       radarRaf = requestAnimationFrame(drawRadar);
     }
   }
@@ -991,6 +1007,7 @@ function bindUI() {
     document.documentElement.dataset.theme = next;
     store.set('contexo:theme', next);
     updateThemeBtn();
+    if (rctx) startRadar(); // repaint with new ink colors if loop is off (reduced motion)
   });
   $('howto-btn').addEventListener('click', () => openModal($('modal-howto')));
   $('stats-btn').addEventListener('click', () => {
@@ -998,7 +1015,7 @@ function bindUI() {
     openModal($('modal-stats'));
   });
 
-  window.addEventListener('resize', sizeRadar);
+  window.addEventListener('resize', () => { sizeRadar(); if (rctx) startRadar(); });
 }
 
 async function init() {
@@ -1008,6 +1025,11 @@ async function init() {
   rctx = radar().getContext('2d');
   sizeRadar();
   document.addEventListener('visibilitychange', onRadarVisibility);
+  // If the OS motion preference flips mid-session: turning reduce on
+  // stops the loop at the next frame; turning it off resumes looping.
+  if (motionMql && typeof motionMql.addEventListener === 'function') {
+    motionMql.addEventListener('change', () => { startRadar(); });
+  }
   startRadar();
   await loadVocab();
   await loadGame();
