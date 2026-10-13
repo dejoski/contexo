@@ -571,7 +571,7 @@ function renderControls() {
   $('hint-btn').disabled = hintOff;
   $('hint-btn').title = oneAway
     ? 'You’re one word away — take the guess!'
-    : 'Get a hint word, about half as close as your best guess';
+    : 'Get a hint word, about half as close as your best guess (shortcut: H)';
   $('giveup-btn').disabled = over;
   // No empty share cards: heat strip needs at least one guess.
   $('share-btn').disabled = state.guesses.length === 0;
@@ -833,6 +833,47 @@ function drawRadar(now) {
   }
 }
 
+// ---------------- keyboard shortcuts ----------------
+// Desktop flow: after clicking a button (Hint, a mode tab, …) focus leaves
+// the guess box and typing goes nowhere. Two shortcuts fix that without
+// ever hijacking real typing:
+//   H          -> hint (same rules as the Hint button)
+//   any other printable key -> jump back to the guess box, letter included
+// Ignored while a modal is open, while already typing in a field, during
+// IME composition, with Ctrl/Meta/Alt held, and once the game is over.
+function anyModalOpen() {
+  return MODAL_IDS.some((id) => {
+    const m = $(id);
+    return m && m.classList.contains('open');
+  });
+}
+
+function onShortcutKey(e) {
+  if (e.defaultPrevented || e.isComposing) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (anyModalOpen()) return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' ||
+            t.tagName === 'SELECT' || t.isContentEditable)) return;
+  if (!puzzle || !state || state.won || state.gaveUp) return;
+  if (e.key === 'h' || e.key === 'H') {
+    if (e.repeat) return; // holding H must not burn through hints
+    e.preventDefault();
+    handleHint();
+    return;
+  }
+  if (e.key && e.key.length === 1 && e.key !== ' ') {
+    const input = $('guess-input');
+    if (!input || input.disabled) return;
+    e.preventDefault(); // we insert the char ourselves — exactly once
+    input.focus();
+    const start = input.selectionStart == null ? input.value.length : input.selectionStart;
+    const end = input.selectionEnd == null ? input.value.length : input.selectionEnd;
+    input.value = input.value.slice(0, start) + e.key + input.value.slice(end);
+    input.setSelectionRange(start + 1, start + 1);
+  }
+}
+
 // ---------------- mode / puzzle loading ----------------
 async function loadDaily(date) {
   mode = 'daily';
@@ -958,6 +999,7 @@ function updateThemeBtn() {
 }
 
 function bindUI() {
+  document.addEventListener('keydown', onShortcutKey);
   $('guess-form').addEventListener('submit', handleGuess);
   $('hint-btn').addEventListener('click', handleHint);
   $('giveup-btn').addEventListener('click', openGiveUp);
